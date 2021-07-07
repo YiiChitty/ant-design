@@ -2,6 +2,7 @@
 category: Components
 type: Data Display
 title: Tag
+cover: https://gw.alipayobjects.com/zos/alicdn/cH1BOLfxC/Tag.svg
 ---
 
 Tag for categorizing or markup.
@@ -18,15 +19,16 @@ Tag for categorizing or markup.
 
 | Property | Description | Type | Default | Version |
 | --- | --- | --- | --- | --- |
-| afterClose | Callback executed when close animation is completed, please use `onClose`, we will remove this in the next version | () => void | - |  |
-| closable | Whether the Tag can be closed | boolean | `false` |  |
+| closable | Whether the Tag can be closed | boolean | false |  |
+| closeIcon | Custom close icon | ReactNode | - | 4.4.0 |
 | color | Color of the Tag | string | - |  |
+| icon | Set the icon of tag | ReactNode | - |  |
+| visible | Whether the Tag is closed or not | boolean | true |  |
 | onClose | Callback executed when tag is closed | (e) => void | - |  |
-| visible | Whether the Tag is closed or not | boolean | `true` | 3.7.0 |
 
 ### Tag.CheckableTag
 
-| Property | Description | Type | Default | Version |
-| --- | --- | --- | --- | --- |
-| checked | Checked status of Tag | boolean | `false` |  |
-| onChange | Callback executed when Tag is checked/unchecked | (checked) => void | - |  |
+| Property | Description | Type | Default |
+| --- | --- | --- | --- |
+| checked | Checked status of Tag | boolean | false |
+| onChange | Callback executed when Tag is checked/unchecked | (checked) => void | - |

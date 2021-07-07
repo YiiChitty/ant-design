@@ -11,114 +11,73 @@ title:
 
 ## en-US
 
-Demonstration of [Lookup Patterns: Certain Category](https://ant.design/docs/spec/reaction#Lookup-Patterns). Basic Usage, set datasource of autocomplete with `dataSource` property.
+Demonstration of [Lookup Patterns: Certain Category](https://ant.design/docs/spec/reaction#Lookup-Patterns). Basic Usage, set options of autocomplete with `options` property.
 
-```jsx
-import { Icon, Input, AutoComplete } from 'antd';
+```tsx
+import { Input, AutoComplete } from 'antd';
+import { UserOutlined } from '@ant-design/icons';
 
-const { Option, OptGroup } = AutoComplete;
+const renderTitle = (title: string) => (
+  <span>
+    {title}
+    <a
+      style={{ float: 'right' }}
+      href="https://www.google.com/search?q=antd"
+      target="_blank"
+      rel="noopener noreferrer"
+    >
+      more
+    </a>
+  </span>
+);
 
-const dataSource = [
+const renderItem = (title: string, count: number) => ({
+  value: title,
+  label: (
+    <div
+      style={{
+        display: 'flex',
+        justifyContent: 'space-between',
+      }}
+    >
+      {title}
+      <span>
+        <UserOutlined /> {count}
+      </span>
+    </div>
+  ),
+});
+
+const options = [
   {
-    title: 'Libraries',
-    children: [
-      {
-        title: 'AntDesign',
-        count: 10000,
-      },
-      {
-        title: 'AntDesign UI',
-        count: 10600,
-      },
-    ],
+    label: renderTitle('Libraries'),
+    options: [renderItem('AntDesign', 10000), renderItem('AntDesign UI', 10600)],
   },
   {
-    title: 'Solutions',
-    children: [
-      {
-        title: 'AntDesign UI',
-        count: 60100,
-      },
-      {
-        title: 'AntDesign',
-        count: 30010,
-      },
-    ],
+    label: renderTitle('Solutions'),
+    options: [renderItem('AntDesign UI FAQ', 60100), renderItem('AntDesign FAQ', 30010)],
   },
   {
-    title: 'Articles',
-    children: [
-      {
-        title: 'AntDesign design language',
-        count: 100000,
-      },
-    ],
+    label: renderTitle('Articles'),
+    options: [renderItem('AntDesign design language', 100000)],
   },
 ];
 
-function renderTitle(title) {
-  return (
-    <span>
-      {title}
-      <a
-        style={{ float: 'right' }}
-        href="https://www.google.com/search?q=antd"
-        target="_blank"
-        rel="noopener noreferrer"
-      >
-        more
-      </a>
-    </span>
-  );
-}
-
-const options = dataSource
-  .map(group => (
-    <OptGroup key={group.title} label={renderTitle(group.title)}>
-      {group.children.map(opt => (
-        <Option key={opt.title} value={opt.title}>
-          {opt.title}
-          <span className="certain-search-item-count">{opt.count} people</span>
-        </Option>
-      ))}
-    </OptGroup>
-  ))
-  .concat([
-    <Option disabled key="all" className="show-all">
-      <a href="https://www.google.com/search?q=antd" target="_blank" rel="noopener noreferrer">
-        View all results
-      </a>
-    </Option>,
-  ]);
-
-function Complete() {
-  return (
-    <div className="certain-category-search-wrapper" style={{ width: 250 }}>
-      <AutoComplete
-        className="certain-category-search"
-        dropdownClassName="certain-category-search-dropdown"
-        dropdownMatchSelectWidth={false}
-        dropdownStyle={{ width: 300 }}
-        size="large"
-        style={{ width: '100%' }}
-        dataSource={options}
-        placeholder="input here"
-        optionLabelProp="value"
-      >
-        <Input suffix={<Icon type="search" className="certain-category-icon" />} />
-      </AutoComplete>
-    </div>
-  );
-}
+const Complete: React.FC = () => (
+  <AutoComplete
+    dropdownClassName="certain-category-search-dropdown"
+    dropdownMatchSelectWidth={500}
+    style={{ width: 250 }}
+    options={options}
+  >
+    <Input.Search size="large" placeholder="input here" />
+  </AutoComplete>
+);
 
 ReactDOM.render(<Complete />, mountNode);
 ```
 
 ```css
-.certain-category-search.ant-select-auto-complete .ant-input-affix-wrapper .ant-input-suffix {
-  right: 12px;
-}
-
 .certain-category-search-dropdown .ant-select-dropdown-menu-item-group-title {
   color: #666;
   font-weight: bold;
@@ -139,21 +98,5 @@ ReactDOM.render(<Complete />, mountNode);
 
 .certain-category-search-dropdown .ant-select-dropdown-menu {
   max-height: 300px;
-}
-
-.certain-search-item-count {
-  position: absolute;
-  color: #999;
-  right: 16px;
-}
-
-.certain-category-search.ant-select-focused .certain-category-icon {
-  color: #108ee9;
-}
-
-.certain-category-icon {
-  color: #6e6e6e;
-  transition: all 0.3s cubic-bezier(0.645, 0.045, 0.355, 1);
-  font-size: 16px;
 }
 ```

@@ -4,7 +4,11 @@
     box-shadow: @box-shadow-base;
 
     [class^='ds-dataset-'] {
+      background: @component-background;
       border: none;
+      .algolia-docsearch-suggestion {
+        background: @component-background;
+      }
     }
 
     &::before {
@@ -17,6 +21,7 @@
   }
 
   .algolia-docsearch-suggestion--highlight {
+    padding: 0;
     color: @primary-color;
   }
 }

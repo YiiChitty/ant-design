@@ -6,6 +6,10 @@ interface MeasureResult {
   finished: boolean;
   reactNode: React.ReactNode;
 }
+interface Option {
+  rows: number;
+  suffix?: string;
+}
 
 // We only handle element & text node.
 const ELEMENT_NODE = 1;
@@ -53,7 +57,7 @@ function mergeChildren(children: React.ReactNode[]): React.ReactNode[] {
 
 export default (
   originEle: HTMLElement,
-  rows: number,
+  option: Option,
   content: React.ReactNode,
   fixedContent: React.ReactNode[],
   ellipsisStr: string,
@@ -61,15 +65,20 @@ export default (
   if (!ellipsisContainer) {
     ellipsisContainer = document.createElement('div');
     ellipsisContainer.setAttribute('aria-hidden', 'true');
+  }
+
+  // HMR will remove this from body which should patch back
+  if (!ellipsisContainer.parentNode) {
     document.body.appendChild(ellipsisContainer);
   }
 
+  const { rows, suffix = '' } = option;
   // Get origin style
   const originStyle = window.getComputedStyle(originEle);
   const originCSS = styleToString(originStyle);
   const lineHeight = pxToNumber(originStyle.lineHeight);
   const maxHeight =
-    lineHeight * (rows + 1) +
+    Math.floor(lineHeight) * (rows + 1) +
     pxToNumber(originStyle.paddingTop) +
     pxToNumber(originStyle.paddingBottom);
 
@@ -92,7 +101,10 @@ export default (
   const contentList: React.ReactNode[] = mergeChildren(toArray(content));
   render(
     <div style={wrapperStyle}>
-      <span style={wrapperStyle}>{contentList}</span>
+      <span style={wrapperStyle}>
+        {contentList}
+        {suffix}
+      </span>
       <span style={wrapperStyle}>{fixedContent}</span>
     </div>,
     ellipsisContainer,
@@ -125,7 +137,7 @@ export default (
   // Create origin content holder
   const ellipsisContentHolder = document.createElement('span');
   ellipsisContainer.appendChild(ellipsisContentHolder);
-  const ellipsisTextNode = document.createTextNode(ellipsisStr);
+  const ellipsisTextNode = document.createTextNode(ellipsisStr + suffix);
   ellipsisContentHolder.appendChild(ellipsisTextNode);
 
   fixedNodes.forEach(childNode => {
@@ -155,7 +167,7 @@ export default (
         const currentStepText = fullText.slice(0, step);
         textNode.textContent = currentStepText;
 
-        if (inRange()) {
+        if (inRange() || !currentStepText) {
           return step === fullText.length
             ? {
                 finished: false,
@@ -204,6 +216,7 @@ export default (
 
     // Not handle other type of content
     // PS: This code should not be attached after react 16
+    /* istanbul ignore next */
     return {
       finished: false,
       reactNode: null,

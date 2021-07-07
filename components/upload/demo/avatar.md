@@ -9,16 +9,17 @@ title:
 
 点击上传用户头像，并使用 `beforeUpload` 限制用户上传的图片格式和大小。
 
-> `beforeUpload` 的返回值可以是一个 Promise 以支持异步处理，如服务端校验等：[示例](http://react-component.github.io/upload/examples/beforeUpload.html)。
+> `beforeUpload` 的返回值可以是一个 Promise 以支持异步处理，如服务端校验等：[示例](https://upload-react-component.vercel.app/demo/before-upload#beforeupload)。
 
 ## en-US
 
 Click to upload user's avatar, and validate size and format of picture with `beforeUpload`.
 
-> The return value of function `beforeUpload` can be a Promise to check asynchronously. [demo](http://react-component.github.io/upload/examples/beforeUpload.html)
+> The return value of function `beforeUpload` can be a Promise to check asynchronously. [demo](https://upload-react-component.vercel.app/demo/before-upload#beforeupload)
 
 ```jsx
-import { Upload, Icon, message } from 'antd';
+import { Upload, message } from 'antd';
+import { LoadingOutlined, PlusOutlined } from '@ant-design/icons';
 
 function getBase64(img, callback) {
   const reader = new FileReader();
@@ -60,13 +61,13 @@ class Avatar extends React.Component {
   };
 
   render() {
+    const { loading, imageUrl } = this.state;
     const uploadButton = (
       <div>
-        <Icon type={this.state.loading ? 'loading' : 'plus'} />
-        <div className="ant-upload-text">Upload</div>
+        {loading ? <LoadingOutlined /> : <PlusOutlined />}
+        <div style={{ marginTop: 8 }}>Upload</div>
       </div>
     );
-    const { imageUrl } = this.state;
     return (
       <Upload
         name="avatar"

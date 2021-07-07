@@ -1,7 +1,8 @@
 import * as React from 'react';
 import { Circle as RCCircle } from 'rc-progress';
+import { presetPrimaryColors } from '@ant-design/colors';
 import classNames from 'classnames';
-import { validProgress } from './utils';
+import { validProgress, getSuccessPercent } from './utils';
 import { ProgressProps } from './progress';
 
 interface CircleProps extends ProgressProps {
@@ -10,31 +11,12 @@ interface CircleProps extends ProgressProps {
   progressStatus: string;
 }
 
-const statusColorMap: Record<string, string> = {
-  normal: '#108ee9',
-  exception: '#ff5500',
-  success: '#87d068',
-};
-
-function getPercentage({ percent, successPercent }: CircleProps) {
-  const ptg = validProgress(percent);
-  if (!successPercent) {
-    return ptg;
-  }
-
-  const successPtg = validProgress(successPercent);
-  return [successPercent, validProgress(ptg - successPtg)];
+function getPercentage({ percent, success, successPercent }: CircleProps) {
+  const realSuccessPercent = validProgress(getSuccessPercent({ success, successPercent }));
+  return [realSuccessPercent, validProgress(validProgress(percent) - realSuccessPercent)];
 }
 
-function getStrokeColor({ progressStatus, successPercent, strokeColor }: CircleProps) {
-  const color = strokeColor || statusColorMap[progressStatus];
-  if (!successPercent) {
-    return color;
-  }
-  return [statusColorMap.success, color];
-}
-
-const Circle: React.SFC<CircleProps> = props => {
+const Circle: React.FC<CircleProps> = props => {
   const {
     prefixCls,
     width,
@@ -51,12 +33,24 @@ const Circle: React.SFC<CircleProps> = props => {
     width: circleSize,
     height: circleSize,
     fontSize: circleSize * 0.15 + 6,
-  };
+  } as React.CSSProperties;
   const circleWidth = strokeWidth || 6;
   const gapPos = gapPosition || (type === 'dashboard' && 'bottom') || 'top';
-  const gapDeg = gapDegree || (type === 'dashboard' ? 75 : undefined);
-  const strokeColor = getStrokeColor(props);
-  const isGradient = Object.prototype.toString.call(strokeColor) === '[object Object]';
+
+  const getGapDegree = () => {
+    // Support gapDeg = 0 when type = 'dashboard'
+    if (gapDegree || gapDegree === 0) {
+      return gapDegree;
+    }
+    if (type === 'dashboard') {
+      return 75;
+    }
+    return undefined;
+  };
+
+  // using className to style stroke color
+  const isGradient = Object.prototype.toString.call(props.strokeColor) === '[object Object]';
+  const strokeColor = [presetPrimaryColors.green, props.strokeColor || null];
 
   const wrapperClassName = classNames(`${prefixCls}-inner`, {
     [`${prefixCls}-circle-gradient`]: isGradient,
@@ -72,7 +66,7 @@ const Circle: React.SFC<CircleProps> = props => {
         strokeLinecap={strokeLinecap}
         trailColor={trailColor}
         prefixCls={prefixCls}
-        gapDegree={gapDeg}
+        gapDegree={getGapDegree()}
         gapPosition={gapPos}
       />
       {children}
