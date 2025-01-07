@@ -5,11 +5,12 @@ import classNames from 'classnames';
 export interface SkeletonTitleProps {
   prefixCls?: string;
   className?: string;
-  style?: object;
+  style?: React.CSSProperties;
   width?: number | string;
 }
 
-const Title = ({ prefixCls, className, width, style }: SkeletonTitleProps) => (
+const Title: React.FC<SkeletonTitleProps> = ({ prefixCls, className, width, style }) => (
+  // biome-ignore lint/a11y/useHeadingContent: HOC here
   <h3 className={classNames(prefixCls, className)} style={{ width, ...style }} />
 );
 

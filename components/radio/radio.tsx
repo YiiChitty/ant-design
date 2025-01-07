@@ -1,93 +1,121 @@
 import * as React from 'react';
-import * as PropTypes from 'prop-types';
-import RcCheckbox from 'rc-checkbox';
 import classNames from 'classnames';
-import shallowEqual from 'shallowequal';
-import RadioGroup from './group';
-import RadioButton from './radioButton';
-import { RadioProps, RadioChangeEvent, RadioGroupContext } from './interface';
-import { ConfigConsumer, ConfigConsumerProps } from '../config-provider';
+import RcCheckbox from 'rc-checkbox';
+import { composeRef } from 'rc-util/lib/ref';
 
-export default class Radio extends React.Component<RadioProps, {}> {
-  static Group: typeof RadioGroup;
+import { devUseWarning } from '../_util/warning';
+import Wave from '../_util/wave';
+import { TARGET_CLS } from '../_util/wave/interface';
+import useBubbleLock from '../checkbox/useBubbleLock';
+import { ConfigContext } from '../config-provider';
+import DisabledContext from '../config-provider/DisabledContext';
+import useCSSVarCls from '../config-provider/hooks/useCSSVarCls';
+import { FormItemInputContext } from '../form/context';
+import RadioGroupContext, { RadioOptionTypeContext } from './context';
+import type { RadioChangeEvent, RadioProps, RadioRef } from './interface';
+import useStyle from './style';
 
-  static Button: typeof RadioButton;
+const InternalRadio: React.ForwardRefRenderFunction<RadioRef, RadioProps> = (props, ref) => {
+  const groupContext = React.useContext(RadioGroupContext);
+  const radioOptionTypeContext = React.useContext(RadioOptionTypeContext);
 
-  static defaultProps = {
-    type: 'radio',
-  };
+  const { getPrefixCls, direction, radio } = React.useContext(ConfigContext);
+  const innerRef = React.useRef<RadioRef>(null);
+  const mergedRef = composeRef(ref, innerRef);
+  const { isFormItemInput } = React.useContext(FormItemInputContext);
 
-  static contextTypes = {
-    radioGroup: PropTypes.any,
-  };
+  if (process.env.NODE_ENV !== 'production') {
+    const warning = devUseWarning('Radio');
 
-  context: any;
-
-  private rcCheckbox: any;
-
-  shouldComponentUpdate(nextProps: RadioProps, nextState: {}, nextContext: RadioGroupContext) {
-    return (
-      !shallowEqual(this.props, nextProps) ||
-      !shallowEqual(this.state, nextState) ||
-      !shallowEqual(this.context.radioGroup, nextContext.radioGroup)
-    );
+    warning(!('optionType' in props), 'usage', '`optionType` is only support in Radio.Group.');
   }
 
-  saveCheckbox = (node: any) => {
-    this.rcCheckbox = node;
+  const onChange = (e: RadioChangeEvent) => {
+    props.onChange?.(e);
+    groupContext?.onChange?.(e);
   };
 
-  onChange = (e: RadioChangeEvent) => {
-    if (this.props.onChange) {
-      this.props.onChange(e);
-    }
+  const {
+    prefixCls: customizePrefixCls,
+    className,
+    rootClassName,
+    children,
+    style,
+    title,
+    ...restProps
+  } = props;
+  const radioPrefixCls = getPrefixCls('radio', customizePrefixCls);
 
-    if (this.context.radioGroup && this.context.radioGroup.onChange) {
-      this.context.radioGroup.onChange(e);
-    }
-  };
+  const isButtonType = (groupContext?.optionType || radioOptionTypeContext) === 'button';
+  const prefixCls = isButtonType ? `${radioPrefixCls}-button` : radioPrefixCls;
 
-  focus() {
-    this.rcCheckbox.focus();
+  // Style
+  const rootCls = useCSSVarCls(radioPrefixCls);
+  const [wrapCSSVar, hashId, cssVarCls] = useStyle(radioPrefixCls, rootCls);
+
+  const radioProps: RadioProps = { ...restProps };
+
+  // ===================== Disabled =====================
+  const disabled = React.useContext(DisabledContext);
+
+  if (groupContext) {
+    radioProps.name = groupContext.name;
+    radioProps.onChange = onChange;
+    radioProps.checked = props.value === groupContext.value;
+    radioProps.disabled = radioProps.disabled ?? groupContext.disabled;
   }
 
-  blur() {
-    this.rcCheckbox.blur();
-  }
-
-  renderRadio = ({ getPrefixCls }: ConfigConsumerProps) => {
-    const { props, context } = this;
-    const { prefixCls: customizePrefixCls, className, children, style, ...restProps } = props;
-    const { radioGroup } = context;
-    const prefixCls = getPrefixCls('radio', customizePrefixCls);
-    const radioProps: RadioProps = { ...restProps };
-    if (radioGroup) {
-      radioProps.name = radioGroup.name;
-      radioProps.onChange = this.onChange;
-      radioProps.checked = props.value === radioGroup.value;
-      radioProps.disabled = props.disabled || radioGroup.disabled;
-    }
-    const wrapperClassString = classNames(className, {
-      [`${prefixCls}-wrapper`]: true,
+  radioProps.disabled = radioProps.disabled ?? disabled;
+  const wrapperClassString = classNames(
+    `${prefixCls}-wrapper`,
+    {
       [`${prefixCls}-wrapper-checked`]: radioProps.checked,
       [`${prefixCls}-wrapper-disabled`]: radioProps.disabled,
-    });
+      [`${prefixCls}-wrapper-rtl`]: direction === 'rtl',
+      [`${prefixCls}-wrapper-in-form-item`]: isFormItemInput,
+      [`${prefixCls}-wrapper-block`]: !!groupContext?.block,
+    },
+    radio?.className,
+    className,
+    rootClassName,
+    hashId,
+    cssVarCls,
+    rootCls,
+  );
 
-    return (
-      // eslint-disable-next-line jsx-a11y/label-has-associated-control
+  // ============================ Event Lock ============================
+  const [onLabelClick, onInputClick] = useBubbleLock(radioProps.onClick);
+
+  // ============================== Render ==============================
+  return wrapCSSVar(
+    <Wave component="Radio" disabled={radioProps.disabled}>
       <label
         className={wrapperClassString}
-        style={style}
+        style={{ ...radio?.style, ...style }}
         onMouseEnter={props.onMouseEnter}
         onMouseLeave={props.onMouseLeave}
+        title={title}
+        onClick={onLabelClick}
       >
-        <RcCheckbox {...radioProps} prefixCls={prefixCls} ref={this.saveCheckbox} />
+        {/* @ts-ignore */}
+        <RcCheckbox
+          {...radioProps}
+          className={classNames(radioProps.className, { [TARGET_CLS]: !isButtonType })}
+          type="radio"
+          prefixCls={prefixCls}
+          ref={mergedRef}
+          onClick={onInputClick}
+        />
         {children !== undefined ? <span>{children}</span> : null}
       </label>
-    );
-  };
+    </Wave>,
+  );
+};
 
-  render() {
-    return <ConfigConsumer>{this.renderRadio}</ConfigConsumer>;
-  }
+const Radio = React.forwardRef<RadioRef, RadioProps>(InternalRadio);
+
+if (process.env.NODE_ENV !== 'production') {
+  Radio.displayName = 'Radio';
 }
+
+export default Radio;

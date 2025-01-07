@@ -1,128 +1,146 @@
 import * as React from 'react';
-import { polyfill } from 'react-lifecycles-compat';
-import ClearableLabeledInput from './ClearableLabeledInput';
-import ResizableTextArea, { AutoSizeType } from './ResizableTextArea';
-import { ConfigConsumer, ConfigConsumerProps } from '../config-provider';
-import { fixControlledValue, resolveOnChange } from './Input';
+import { forwardRef } from 'react';
+import classNames from 'classnames';
+import type { TextAreaRef as RcTextAreaRef, TextAreaProps as RcTextAreaProps } from 'rc-textarea';
+import RcTextArea from 'rc-textarea';
+import getAllowClear from '../_util/getAllowClear';
+import type { InputStatus } from '../_util/statusUtils';
+import { getMergedStatus, getStatusClassNames } from '../_util/statusUtils';
+import { devUseWarning } from '../_util/warning';
+import { ConfigContext } from '../config-provider';
+import DisabledContext from '../config-provider/DisabledContext';
+import useCSSVarCls from '../config-provider/hooks/useCSSVarCls';
+import useSize from '../config-provider/hooks/useSize';
+import type { SizeType } from '../config-provider/SizeContext';
+import { FormItemInputContext } from '../form/context';
+import type { Variant } from '../config-provider';
+import useVariant from '../form/hooks/useVariants';
+import type { InputFocusOptions } from './Input';
+import { triggerFocus } from './Input';
+import useStyle from './style';
 
-export type HTMLTextareaProps = React.TextareaHTMLAttributes<HTMLTextAreaElement>;
-
-export interface TextAreaProps extends HTMLTextareaProps {
-  prefixCls?: string;
-  /* deprecated, use autoSize instead */
-  autosize?: boolean | AutoSizeType;
-  autoSize?: boolean | AutoSizeType;
-  onPressEnter?: React.KeyboardEventHandler<HTMLTextAreaElement>;
-  allowClear?: boolean;
+export interface TextAreaProps extends Omit<RcTextAreaProps, 'suffix'> {
+  /** @deprecated Use `variant` instead */
+  bordered?: boolean;
+  size?: SizeType;
+  status?: InputStatus;
+  rootClassName?: string;
+  /**
+   * @since 5.13.0
+   * @default "outlined"
+   */
+  variant?: Variant;
 }
 
-export interface TextAreaState {
-  value: any;
+export interface TextAreaRef {
+  focus: (options?: InputFocusOptions) => void;
+  blur: () => void;
+  resizableTextArea?: RcTextAreaRef['resizableTextArea'];
 }
 
-class TextArea extends React.Component<TextAreaProps, TextAreaState> {
-  resizableTextArea: ResizableTextArea;
+const TextArea = forwardRef<TextAreaRef, TextAreaProps>((props, ref) => {
+  const {
+    prefixCls: customizePrefixCls,
+    bordered = true,
+    size: customizeSize,
+    disabled: customDisabled,
+    status: customStatus,
+    allowClear,
+    classNames: classes,
+    rootClassName,
+    className,
+    style,
+    styles,
+    variant: customVariant,
+    ...rest
+  } = props;
 
-  clearableInput: ClearableLabeledInput;
-
-  constructor(props: TextAreaProps) {
-    super(props);
-    const value = typeof props.value === 'undefined' ? props.defaultValue : props.value;
-    this.state = {
-      value,
-    };
+  if (process.env.NODE_ENV !== 'production') {
+    const { deprecated } = devUseWarning('TextArea');
+    deprecated(!('bordered' in props), 'bordered', 'variant');
   }
 
-  static getDerivedStateFromProps(nextProps: TextAreaProps) {
-    if ('value' in nextProps) {
-      return {
-        value: nextProps.value,
-      };
-    }
-    return null;
-  }
+  const { getPrefixCls, direction, textArea } = React.useContext(ConfigContext);
 
-  setValue(value: string, callback?: () => void) {
-    if (!('value' in this.props)) {
-      this.setState({ value }, callback);
-    }
-  }
+  // ===================== Size =====================
+  const mergedSize = useSize(customizeSize);
 
-  focus() {
-    this.resizableTextArea.textArea.focus();
-  }
+  // ===================== Disabled =====================
+  const disabled = React.useContext(DisabledContext);
+  const mergedDisabled = customDisabled ?? disabled;
 
-  blur() {
-    this.resizableTextArea.textArea.blur();
-  }
+  // ===================== Status =====================
+  const {
+    status: contextStatus,
+    hasFeedback,
+    feedbackIcon,
+  } = React.useContext(FormItemInputContext);
+  const mergedStatus = getMergedStatus(contextStatus, customStatus);
 
-  saveTextArea = (resizableTextArea: ResizableTextArea) => {
-    this.resizableTextArea = resizableTextArea;
-  };
+  // ===================== Ref =====================
+  const innerRef = React.useRef<RcTextAreaRef>(null);
 
-  saveClearableInput = (clearableInput: ClearableLabeledInput) => {
-    this.clearableInput = clearableInput;
-  };
+  React.useImperativeHandle(ref, () => ({
+    resizableTextArea: innerRef.current?.resizableTextArea,
+    focus: (option?: InputFocusOptions) => {
+      triggerFocus(innerRef.current?.resizableTextArea?.textArea, option);
+    },
+    blur: () => innerRef.current?.blur(),
+  }));
 
-  handleChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
-    this.setValue(e.target.value, () => {
-      this.resizableTextArea.resizeTextarea();
-    });
-    resolveOnChange(this.resizableTextArea.textArea, e, this.props.onChange);
-  };
+  const prefixCls = getPrefixCls('input', customizePrefixCls);
 
-  handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-    const { onPressEnter, onKeyDown } = this.props;
-    if (e.keyCode === 13 && onPressEnter) {
-      onPressEnter(e);
-    }
-    if (onKeyDown) {
-      onKeyDown(e);
-    }
-  };
+  // ===================== Style =====================
+  const rootCls = useCSSVarCls(prefixCls);
+  const [wrapCSSVar, hashId, cssVarCls] = useStyle(prefixCls, rootCls);
 
-  handleReset = (e: React.MouseEvent<HTMLElement, MouseEvent>) => {
-    this.setValue('', () => {
-      this.resizableTextArea.renderTextArea();
-      this.focus();
-    });
-    resolveOnChange(this.resizableTextArea.textArea, e, this.props.onChange);
-  };
+  const [variant, enableVariantCls] = useVariant('textArea', customVariant, bordered);
 
-  renderTextArea = (prefixCls: string) => {
-    return (
-      <ResizableTextArea
-        {...this.props}
-        prefixCls={prefixCls}
-        onKeyDown={this.handleKeyDown}
-        onChange={this.handleChange}
-        ref={this.saveTextArea}
-      />
-    );
-  };
+  const mergedAllowClear = getAllowClear(allowClear ?? textArea?.allowClear);
 
-  renderComponent = ({ getPrefixCls }: ConfigConsumerProps) => {
-    const { value } = this.state;
-    const { prefixCls: customizePrefixCls } = this.props;
-    const prefixCls = getPrefixCls('input', customizePrefixCls);
-    return (
-      <ClearableLabeledInput
-        {...this.props}
-        prefixCls={prefixCls}
-        inputType="text"
-        value={fixControlledValue(value)}
-        element={this.renderTextArea(prefixCls)}
-        handleReset={this.handleReset}
-        ref={this.saveClearableInput}
-      />
-    );
-  };
-
-  render() {
-    return <ConfigConsumer>{this.renderComponent}</ConfigConsumer>;
-  }
-}
-
-polyfill(TextArea);
+  return wrapCSSVar(
+    <RcTextArea
+      autoComplete={textArea?.autoComplete}
+      {...rest}
+      style={{ ...textArea?.style, ...style }}
+      styles={{ ...textArea?.styles, ...styles }}
+      disabled={mergedDisabled}
+      allowClear={mergedAllowClear}
+      className={classNames(cssVarCls, rootCls, className, rootClassName, textArea?.className)}
+      classNames={{
+        ...classes,
+        ...textArea?.classNames,
+        textarea: classNames(
+          {
+            [`${prefixCls}-sm`]: mergedSize === 'small',
+            [`${prefixCls}-lg`]: mergedSize === 'large',
+          },
+          hashId,
+          classes?.textarea,
+          textArea?.classNames?.textarea,
+        ),
+        variant: classNames(
+          {
+            [`${prefixCls}-${variant}`]: enableVariantCls,
+          },
+          getStatusClassNames(prefixCls, mergedStatus),
+        ),
+        affixWrapper: classNames(
+          `${prefixCls}-textarea-affix-wrapper`,
+          {
+            [`${prefixCls}-affix-wrapper-rtl`]: direction === 'rtl',
+            [`${prefixCls}-affix-wrapper-sm`]: mergedSize === 'small',
+            [`${prefixCls}-affix-wrapper-lg`]: mergedSize === 'large',
+            [`${prefixCls}-textarea-show-count`]: props.showCount || props.count?.show,
+          },
+          hashId,
+        ),
+      }}
+      prefixCls={prefixCls}
+      suffix={hasFeedback && <span className={`${prefixCls}-textarea-suffix`}>{feedbackIcon}</span>}
+      ref={innerRef}
+    />,
+  );
+});
 
 export default TextArea;

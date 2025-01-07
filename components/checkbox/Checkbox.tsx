@@ -1,36 +1,46 @@
 import * as React from 'react';
-import * as PropTypes from 'prop-types';
-import { polyfill } from 'react-lifecycles-compat';
 import classNames from 'classnames';
+import type { CheckboxRef } from 'rc-checkbox';
 import RcCheckbox from 'rc-checkbox';
-import shallowEqual from 'shallowequal';
-import CheckboxGroup, { CheckboxGroupContext } from './Group';
-import { ConfigConsumer, ConfigConsumerProps } from '../config-provider';
-import warning from '../_util/warning';
+import { composeRef } from 'rc-util/lib/ref';
+
+import { devUseWarning } from '../_util/warning';
+import Wave from '../_util/wave';
+import { TARGET_CLS } from '../_util/wave/interface';
+import { ConfigContext } from '../config-provider';
+import DisabledContext from '../config-provider/DisabledContext';
+import useCSSVarCls from '../config-provider/hooks/useCSSVarCls';
+import { FormItemInputContext } from '../form/context';
+import GroupContext from './GroupContext';
+import useStyle from './style';
+import useBubbleLock from './useBubbleLock';
 
 export interface AbstractCheckboxProps<T> {
   prefixCls?: string;
   className?: string;
+  rootClassName?: string;
   defaultChecked?: boolean;
   checked?: boolean;
   style?: React.CSSProperties;
   disabled?: boolean;
+  title?: string;
   onChange?: (e: T) => void;
   onClick?: React.MouseEventHandler<HTMLElement>;
   onMouseEnter?: React.MouseEventHandler<HTMLElement>;
   onMouseLeave?: React.MouseEventHandler<HTMLElement>;
   onKeyPress?: React.KeyboardEventHandler<HTMLElement>;
   onKeyDown?: React.KeyboardEventHandler<HTMLElement>;
+  onFocus?: React.FocusEventHandler<HTMLInputElement>;
+  onBlur?: React.FocusEventHandler<HTMLInputElement>;
   value?: any;
   tabIndex?: number;
   name?: string;
   children?: React.ReactNode;
   id?: string;
   autoFocus?: boolean;
-}
-
-export interface CheckboxProps extends AbstractCheckboxProps<CheckboxChangeEvent> {
-  indeterminate?: boolean;
+  type?: string;
+  skipGroup?: boolean;
+  required?: boolean;
 }
 
 export interface CheckboxChangeEventTarget extends CheckboxProps {
@@ -44,136 +54,139 @@ export interface CheckboxChangeEvent {
   nativeEvent: MouseEvent;
 }
 
-class Checkbox extends React.Component<CheckboxProps, {}> {
-  static Group: typeof CheckboxGroup;
+export interface CheckboxProps extends AbstractCheckboxProps<CheckboxChangeEvent> {
+  indeterminate?: boolean;
+}
 
-  static __ANT_CHECKBOX = true;
+const InternalCheckbox: React.ForwardRefRenderFunction<CheckboxRef, CheckboxProps> = (
+  props,
+  ref,
+) => {
+  const {
+    prefixCls: customizePrefixCls,
+    className,
+    rootClassName,
+    children,
+    indeterminate = false,
+    style,
+    onMouseEnter,
+    onMouseLeave,
+    skipGroup = false,
+    disabled,
+    ...restProps
+  } = props;
+  const { getPrefixCls, direction, checkbox } = React.useContext(ConfigContext);
+  const checkboxGroup = React.useContext(GroupContext);
+  const { isFormItemInput } = React.useContext(FormItemInputContext);
+  const contextDisabled = React.useContext(DisabledContext);
+  const mergedDisabled = (checkboxGroup?.disabled || disabled) ?? contextDisabled;
 
-  static defaultProps = {
-    indeterminate: false,
-  };
+  const prevValue = React.useRef(restProps.value);
+  const checkboxRef = React.useRef<CheckboxRef>(null);
+  const mergedRef = composeRef(ref, checkboxRef);
 
-  static contextTypes = {
-    checkboxGroup: PropTypes.any,
-  };
-
-  context: any;
-
-  private rcCheckbox: any;
-
-  componentDidMount() {
-    const { value } = this.props;
-    const { checkboxGroup = {} } = this.context || {};
-    if (checkboxGroup.registerValue) {
-      checkboxGroup.registerValue(value);
-    }
+  if (process.env.NODE_ENV !== 'production') {
+    const warning = devUseWarning('Checkbox');
 
     warning(
-      'checked' in this.props || (this.context || {}).checkboxGroup || !('value' in this.props),
-      'Checkbox',
-      '`value` is not validate prop, do you mean `checked`?',
+      'checked' in restProps || !!checkboxGroup || !('value' in restProps),
+      'usage',
+      '`value` is not a valid prop, do you mean `checked`?',
     );
   }
 
-  shouldComponentUpdate(
-    nextProps: CheckboxProps,
-    nextState: {},
-    nextContext: CheckboxGroupContext,
-  ) {
-    return (
-      !shallowEqual(this.props, nextProps) ||
-      !shallowEqual(this.state, nextState) ||
-      !shallowEqual(this.context.checkboxGroup, nextContext.checkboxGroup)
-    );
-  }
+  React.useEffect(() => {
+    checkboxGroup?.registerValue(restProps.value);
+  }, []);
 
-  componentDidUpdate({ value: prevValue }: CheckboxProps) {
-    const { value } = this.props;
-    const { checkboxGroup = {} } = this.context || {};
-    if (value !== prevValue && checkboxGroup.registerValue && checkboxGroup.cancelValue) {
-      checkboxGroup.cancelValue(prevValue);
-      checkboxGroup.registerValue(value);
+  React.useEffect(() => {
+    if (skipGroup) {
+      return;
     }
-  }
-
-  componentWillUnmount() {
-    const { value } = this.props;
-    const { checkboxGroup = {} } = this.context || {};
-    if (checkboxGroup.cancelValue) {
-      checkboxGroup.cancelValue(value);
+    if (restProps.value !== prevValue.current) {
+      checkboxGroup?.cancelValue(prevValue.current);
+      checkboxGroup?.registerValue(restProps.value);
+      prevValue.current = restProps.value;
     }
-  }
+    return () => checkboxGroup?.cancelValue(restProps.value);
+  }, [restProps.value]);
 
-  saveCheckbox = (node: any) => {
-    this.rcCheckbox = node;
-  };
-
-  focus() {
-    this.rcCheckbox.focus();
-  }
-
-  blur() {
-    this.rcCheckbox.blur();
-  }
-
-  renderCheckbox = ({ getPrefixCls }: ConfigConsumerProps) => {
-    const { props, context } = this;
-    const {
-      prefixCls: customizePrefixCls,
-      className,
-      children,
-      indeterminate,
-      style,
-      onMouseEnter,
-      onMouseLeave,
-      ...restProps
-    } = props;
-    const { checkboxGroup } = context;
-    const prefixCls = getPrefixCls('checkbox', customizePrefixCls);
-    const checkboxProps: CheckboxProps = { ...restProps };
-    if (checkboxGroup) {
-      checkboxProps.onChange = (...args) => {
-        if (restProps.onChange) {
-          restProps.onChange(...args);
-        }
-        checkboxGroup.toggleOption({ label: children, value: props.value });
-      };
-      checkboxProps.name = checkboxGroup.name;
-      checkboxProps.checked = checkboxGroup.value.indexOf(props.value) !== -1;
-      checkboxProps.disabled = props.disabled || checkboxGroup.disabled;
+  React.useEffect(() => {
+    if (checkboxRef.current?.input) {
+      checkboxRef.current.input.indeterminate = indeterminate;
     }
-    const classString = classNames(className, {
-      [`${prefixCls}-wrapper`]: true,
+  }, [indeterminate]);
+
+  const prefixCls = getPrefixCls('checkbox', customizePrefixCls);
+  const rootCls = useCSSVarCls(prefixCls);
+  const [wrapCSSVar, hashId, cssVarCls] = useStyle(prefixCls, rootCls);
+
+  const checkboxProps: CheckboxProps = { ...restProps };
+  if (checkboxGroup && !skipGroup) {
+    checkboxProps.onChange = (...args) => {
+      if (restProps.onChange) {
+        restProps.onChange(...args);
+      }
+      if (checkboxGroup.toggleOption) {
+        checkboxGroup.toggleOption({ label: children, value: restProps.value });
+      }
+    };
+    checkboxProps.name = checkboxGroup.name;
+    checkboxProps.checked = checkboxGroup.value.includes(restProps.value);
+  }
+  const classString = classNames(
+    `${prefixCls}-wrapper`,
+    {
+      [`${prefixCls}-rtl`]: direction === 'rtl',
       [`${prefixCls}-wrapper-checked`]: checkboxProps.checked,
-      [`${prefixCls}-wrapper-disabled`]: checkboxProps.disabled,
-    });
-    const checkboxClass = classNames({
-      [`${prefixCls}-indeterminate`]: indeterminate,
-    });
-    return (
-      // eslint-disable-next-line jsx-a11y/label-has-associated-control
+      [`${prefixCls}-wrapper-disabled`]: mergedDisabled,
+      [`${prefixCls}-wrapper-in-form-item`]: isFormItemInput,
+    },
+    checkbox?.className,
+    className,
+    rootClassName,
+    cssVarCls,
+    rootCls,
+    hashId,
+  );
+  const checkboxClass = classNames(
+    { [`${prefixCls}-indeterminate`]: indeterminate },
+    TARGET_CLS,
+    hashId,
+  );
+
+  // ============================ Event Lock ============================
+  const [onLabelClick, onInputClick] = useBubbleLock(checkboxProps.onClick);
+
+  // ============================== Render ==============================
+  return wrapCSSVar(
+    <Wave component="Checkbox" disabled={mergedDisabled}>
       <label
         className={classString}
-        style={style}
+        style={{ ...checkbox?.style, ...style }}
         onMouseEnter={onMouseEnter}
         onMouseLeave={onMouseLeave}
+        onClick={onLabelClick}
       >
+        {/* @ts-ignore */}
         <RcCheckbox
           {...checkboxProps}
+          onClick={onInputClick}
           prefixCls={prefixCls}
           className={checkboxClass}
-          ref={this.saveCheckbox}
+          disabled={mergedDisabled}
+          ref={mergedRef}
         />
         {children !== undefined && <span>{children}</span>}
       </label>
-    );
-  };
+    </Wave>,
+  );
+};
 
-  render() {
-    return <ConfigConsumer>{this.renderCheckbox}</ConfigConsumer>;
-  }
+const Checkbox = React.forwardRef<CheckboxRef, CheckboxProps>(InternalCheckbox);
+
+if (process.env.NODE_ENV !== 'production') {
+  Checkbox.displayName = 'Checkbox';
 }
-
-polyfill(Checkbox);
 
 export default Checkbox;

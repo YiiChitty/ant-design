@@ -1,277 +1,237 @@
+/* eslint-disable react/no-array-index-key */
 import * as React from 'react';
 import classNames from 'classnames';
-import toArray from 'rc-util/lib/Children/toArray';
-import warning from '../_util/warning';
-import ResponsiveObserve, {
-  Breakpoint,
-  BreakpointMap,
-  responsiveArray,
-} from '../_util/responsiveObserve';
-import { ConfigConsumer, ConfigConsumerProps } from '../config-provider';
-import Col from './Col';
 
-export interface DescriptionsItemProps {
-  prefixCls?: string;
-  className?: string;
-  label?: React.ReactNode;
-  children: React.ReactNode;
-  span?: number;
+import type { Breakpoint } from '../_util/responsiveObserver';
+import { matchScreen } from '../_util/responsiveObserver';
+import { devUseWarning } from '../_util/warning';
+import { ConfigContext } from '../config-provider';
+import useSize from '../config-provider/hooks/useSize';
+import useBreakpoint from '../grid/hooks/useBreakpoint';
+import DEFAULT_COLUMN_MAP from './constant';
+import DescriptionsContext from './DescriptionsContext';
+import useItems from './hooks/useItems';
+import useRow from './hooks/useRow';
+import type { DescriptionsItemProps } from './Item';
+import DescriptionsItem from './Item';
+import Row from './Row';
+import useStyle from './style';
+
+interface CompoundedComponent {
+  Item: typeof DescriptionsItem;
 }
 
-const DescriptionsItem: React.SFC<DescriptionsItemProps> = ({ children }) =>
-  children as JSX.Element;
+export interface InternalDescriptionsItemType extends DescriptionsItemProps {
+  key?: React.Key;
+  filled?: boolean;
+}
+
+export interface DescriptionsItemType
+  extends Omit<InternalDescriptionsItemType, 'span' | 'filled'> {
+  span?: number | 'filled' | { [key in Breakpoint]?: number };
+}
 
 export interface DescriptionsProps {
   prefixCls?: string;
   className?: string;
+  rootClassName?: string;
   style?: React.CSSProperties;
   bordered?: boolean;
   size?: 'middle' | 'small' | 'default';
+  /**
+   * @deprecated use `items` instead
+   */
   children?: React.ReactNode;
   title?: React.ReactNode;
+  extra?: React.ReactNode;
   column?: number | Partial<Record<Breakpoint, number>>;
   layout?: 'horizontal' | 'vertical';
   colon?: boolean;
+  labelStyle?: React.CSSProperties;
+  contentStyle?: React.CSSProperties;
+  styles?: {
+    root?: React.CSSProperties;
+    header?: React.CSSProperties;
+    title?: React.CSSProperties;
+    extra?: React.CSSProperties;
+    label?: React.CSSProperties;
+    content?: React.CSSProperties;
+  };
+  classNames?: {
+    root?: string;
+    header?: string;
+    title?: string;
+    extra?: string;
+    label?: string;
+    content?: string;
+  };
+  items?: DescriptionsItemType[];
+  id?: string;
 }
 
-/**
- * Convert children into `column` groups.
- * @param children: DescriptionsItem
- * @param column: number
- */
-const generateChildrenRows = (
-  children: React.ReactNode,
-  column: number,
-): React.ReactElement<DescriptionsItemProps>[][] => {
-  const rows: React.ReactElement<DescriptionsItemProps>[][] = [];
-  let columns: React.ReactElement<DescriptionsItemProps>[] | null = null;
-  let leftSpans: number;
+const Descriptions: React.FC<DescriptionsProps> & CompoundedComponent = (props) => {
+  const {
+    prefixCls: customizePrefixCls,
+    title,
+    extra,
+    column,
+    colon = true,
+    bordered,
+    layout,
+    children,
+    className,
+    rootClassName,
+    style,
+    size: customizeSize,
+    labelStyle,
+    contentStyle,
+    styles,
+    items,
+    classNames: descriptionsClassNames,
+    ...restProps
+  } = props;
+  const { getPrefixCls, direction, descriptions } = React.useContext(ConfigContext);
+  const prefixCls = getPrefixCls('descriptions', customizePrefixCls);
+  const screens = useBreakpoint();
 
-  const itemNodes = toArray(children);
-  itemNodes.forEach((node: React.ReactElement<DescriptionsItemProps>, index: number) => {
-    let itemNode = node;
-
-    if (!columns) {
-      leftSpans = column;
-      columns = [];
-      rows.push(columns);
-    }
-
-    // Always set last span to align the end of Descriptions
-    const lastItem = index === itemNodes.length - 1;
-    let lastSpanSame = true;
-    if (lastItem) {
-      lastSpanSame = !itemNode.props.span || itemNode.props.span === leftSpans;
-      itemNode = React.cloneElement(itemNode, {
-        span: leftSpans,
-      });
-    }
-
-    // Calculate left fill span
-    const { span = 1 } = itemNode.props;
-    columns.push(itemNode);
-    leftSpans -= span;
-
-    if (leftSpans <= 0) {
-      columns = null;
-
-      warning(
-        leftSpans === 0 && lastSpanSame,
-        'Descriptions',
-        'Sum of column `span` in a line exceeds `column` of Descriptions.',
-      );
-    }
-  });
-
-  return rows;
-};
-
-const renderRow = (
-  children: React.ReactElement<DescriptionsItemProps>[],
-  index: number,
-  { prefixCls }: { prefixCls: string },
-  bordered: boolean,
-  layout: 'horizontal' | 'vertical',
-  colon: boolean,
-) => {
-  const renderCol = (
-    colItem: React.ReactElement<DescriptionsItemProps>,
-    type: 'label' | 'content',
-    idx: number,
-  ) => {
-    return (
-      <Col
-        child={colItem}
-        bordered={bordered}
-        colon={colon}
-        type={type}
-        key={`${type}-${colItem.key || idx}`}
-        layout={layout}
-      />
-    );
-  };
-
-  const cloneChildren: JSX.Element[] = [];
-  const cloneContentChildren: JSX.Element[] = [];
-  toArray(children).forEach(
-    (childrenItem: React.ReactElement<DescriptionsItemProps>, idx: number) => {
-      cloneChildren.push(renderCol(childrenItem, 'label', idx));
-      if (layout === 'vertical') {
-        cloneContentChildren.push(renderCol(childrenItem, 'content', idx));
-      } else if (bordered) {
-        cloneChildren.push(renderCol(childrenItem, 'content', idx));
-      }
-    },
-  );
-
-  if (layout === 'vertical') {
-    return [
-      <tr className={`${prefixCls}-row`} key={`label-${index}`}>
-        {cloneChildren}
-      </tr>,
-      <tr className={`${prefixCls}-row`} key={`content-${index}`}>
-        {cloneContentChildren}
-      </tr>,
-    ];
-  }
-
-  return (
-    <tr className={`${prefixCls}-row`} key={index}>
-      {cloneChildren}
-    </tr>
-  );
-};
-
-const defaultColumnMap = {
-  xxl: 3,
-  xl: 3,
-  lg: 3,
-  md: 3,
-  sm: 2,
-  xs: 1,
-};
-
-class Descriptions extends React.Component<
-  DescriptionsProps,
-  {
-    screens: BreakpointMap;
-  }
-> {
-  static defaultProps: DescriptionsProps = {
-    size: 'default',
-    column: defaultColumnMap,
-  };
-
-  static Item: typeof DescriptionsItem = DescriptionsItem;
-
-  state: {
-    screens: BreakpointMap;
-  } = {
-    screens: {},
-  };
-
-  token: string;
-
-  componentDidMount() {
-    const { column } = this.props;
-    this.token = ResponsiveObserve.subscribe(screens => {
-      if (typeof column !== 'object') {
-        return;
-      }
-      this.setState({
-        screens,
-      });
+  // ============================== Warn ==============================
+  if (process.env.NODE_ENV !== 'production') {
+    const warning = devUseWarning('Descriptions');
+    [
+      ['labelStyle', 'styles={{ label: {} }}'],
+      ['contentStyle', 'styles={{ content: {} }}'],
+    ].forEach(([deprecatedName, newName]) => {
+      warning.deprecated(!(deprecatedName in props), deprecatedName, newName);
     });
   }
-
-  componentWillUnmount() {
-    ResponsiveObserve.unsubscribe(this.token);
-  }
-
-  getColumn(): number {
-    const { column } = this.props;
-    if (typeof column === 'object') {
-      for (let i = 0; i < responsiveArray.length; i++) {
-        const breakpoint: Breakpoint = responsiveArray[i];
-        if (this.state.screens[breakpoint] && column[breakpoint] !== undefined) {
-          return column[breakpoint] || defaultColumnMap[breakpoint];
-        }
-      }
-    }
-    // If the configuration is not an object, it is a number, return number
+  // Column count
+  const mergedColumn = React.useMemo(() => {
     if (typeof column === 'number') {
-      return column as number;
+      return column;
     }
-    // If it is an object, but no response is found, this happens only in the test.
-    // Maybe there are some strange environments
-    return 3;
-  }
 
-  render() {
     return (
-      <ConfigConsumer>
-        {({ getPrefixCls }: ConfigConsumerProps) => {
-          const {
-            className,
-            prefixCls: customizePrefixCls,
-            title,
-            size,
-            children,
-            bordered = false,
-            layout = 'horizontal',
-            colon = true,
-            style,
-          } = this.props;
-          const prefixCls = getPrefixCls('descriptions', customizePrefixCls);
-
-          const column = this.getColumn();
-          const cloneChildren = toArray(children)
-            .map((child: React.ReactElement<DescriptionsItemProps>) => {
-              if (React.isValidElement(child)) {
-                return React.cloneElement(child, {
-                  prefixCls,
-                });
-              }
-              return null;
-            })
-            .filter((node: React.ReactElement) => node);
-
-          const childrenArray: Array<
-            React.ReactElement<DescriptionsItemProps>[]
-          > = generateChildrenRows(cloneChildren, column);
-          return (
-            <div
-              className={classNames(prefixCls, className, {
-                [`${prefixCls}-${size}`]: size !== 'default',
-                [`${prefixCls}-bordered`]: !!bordered,
-              })}
-              style={style}
-            >
-              {title && <div className={`${prefixCls}-title`}>{title}</div>}
-              <div className={`${prefixCls}-view`}>
-                <table>
-                  <tbody>
-                    {childrenArray.map((child, index) =>
-                      renderRow(
-                        child,
-                        index,
-                        {
-                          prefixCls,
-                        },
-                        bordered,
-                        layout,
-                        colon,
-                      ),
-                    )}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          );
-        }}
-      </ConfigConsumer>
+      matchScreen(screens, {
+        ...DEFAULT_COLUMN_MAP,
+        ...column,
+      }) ?? 3
     );
-  }
+  }, [screens, column]);
+
+  // Items with responsive
+  const mergedItems = useItems(screens, items, children);
+
+  const mergedSize = useSize(customizeSize);
+  const rows = useRow(mergedColumn, mergedItems);
+
+  const [wrapCSSVar, hashId, cssVarCls] = useStyle(prefixCls);
+
+  // ======================== Render ========================
+  const contextValue = React.useMemo(
+    () => ({
+      labelStyle,
+      contentStyle,
+      styles: {
+        content: { ...descriptions?.styles?.content, ...styles?.content },
+        label: { ...descriptions?.styles?.label, ...styles?.label },
+      },
+      classNames: {
+        label: classNames(descriptions?.classNames?.label, descriptionsClassNames?.label),
+        content: classNames(descriptions?.classNames?.content, descriptionsClassNames?.content),
+      },
+    }),
+    [labelStyle, contentStyle, styles, descriptionsClassNames, descriptions],
+  );
+
+  return wrapCSSVar(
+    <DescriptionsContext.Provider value={contextValue}>
+      <div
+        className={classNames(
+          prefixCls,
+          descriptions?.className,
+          descriptions?.classNames?.root,
+          descriptionsClassNames?.root,
+          {
+            [`${prefixCls}-${mergedSize}`]: mergedSize && mergedSize !== 'default',
+            [`${prefixCls}-bordered`]: !!bordered,
+            [`${prefixCls}-rtl`]: direction === 'rtl',
+          },
+          className,
+          rootClassName,
+          hashId,
+          cssVarCls,
+        )}
+        style={{ ...descriptions?.style, ...descriptions?.styles?.root, ...styles?.root, ...style }}
+        {...restProps}
+      >
+        {(title || extra) && (
+          <div
+            className={classNames(
+              `${prefixCls}-header`,
+              descriptions?.classNames?.header,
+              descriptionsClassNames?.header,
+            )}
+            style={{ ...descriptions?.styles?.header, ...styles?.header }}
+          >
+            {title && (
+              <div
+                className={classNames(
+                  `${prefixCls}-title`,
+                  descriptions?.classNames?.title,
+                  descriptionsClassNames?.title,
+                )}
+                style={{
+                  ...descriptions?.styles?.title,
+                  ...styles?.title,
+                }}
+              >
+                {title}
+              </div>
+            )}
+            {extra && (
+              <div
+                className={classNames(
+                  `${prefixCls}-extra`,
+                  descriptions?.classNames?.extra,
+                  descriptionsClassNames?.extra,
+                )}
+                style={{ ...descriptions?.styles?.extra, ...styles?.extra }}
+              >
+                {extra}
+              </div>
+            )}
+          </div>
+        )}
+
+        <div className={`${prefixCls}-view`}>
+          <table>
+            <tbody>
+              {rows.map((row, index) => (
+                <Row
+                  key={index}
+                  index={index}
+                  colon={colon}
+                  prefixCls={prefixCls}
+                  vertical={layout === 'vertical'}
+                  bordered={bordered}
+                  row={row}
+                />
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </DescriptionsContext.Provider>,
+  );
+};
+
+if (process.env.NODE_ENV !== 'production') {
+  Descriptions.displayName = 'Descriptions';
 }
+
+export type { DescriptionsContextProps } from './DescriptionsContext';
+export { DescriptionsContext };
+
+Descriptions.Item = DescriptionsItem;
 
 export default Descriptions;
